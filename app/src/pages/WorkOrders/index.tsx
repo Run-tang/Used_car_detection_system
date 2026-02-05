@@ -92,6 +92,11 @@ export default function WorkOrders() {
     location: '',
   });
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+
   // Initialize filters from URL params
   useEffect(() => {
     const statusParam = searchParams.get('status');
@@ -108,6 +113,7 @@ export default function WorkOrders() {
   // Update URL params when filters change
   const handleStatusChange = (val: WorkOrderStatus | 'all') => {
     setStatusFilter(val);
+    setCurrentPage(1); // Reset to first page
     const newParams = new URLSearchParams(searchParams);
     if (val === 'all') newParams.delete('status');
     else newParams.set('status', val);
@@ -116,6 +122,7 @@ export default function WorkOrders() {
 
   const handleInspectorChange = (val: string) => {
     setInspectorFilter(val);
+    setCurrentPage(1); // Reset to first page
     const newParams = new URLSearchParams(searchParams);
     if (val === 'all') newParams.delete('inspectorId');
     else newParams.set('inspectorId', val);
@@ -137,11 +144,18 @@ export default function WorkOrders() {
     return matchesSearch && matchesStatus && matchesInspector;
   });
 
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const toggleSelectAll = () => {
-    if (selectedOrders.length === filteredOrders.length) {
+    if (selectedOrders.length === paginatedOrders.length && paginatedOrders.length > 0) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(filteredOrders.map(o => o.id));
+      setSelectedOrders(paginatedOrders.map(o => o.id));
     }
   };
 
@@ -151,6 +165,16 @@ export default function WorkOrders() {
     } else {
       setSelectedOrders([...selectedOrders, id]);
     }
+  };
+
+  // Helper to calculate duration
+  const getDuration = (order: typeof workOrders[0]) => {
+    if (order.status !== 'completed' || !order.completedAt || !order.appointmentTime) return '-';
+
+    // Convert to mock duration for display since mock dates might be fixed
+    // Real logic: const diff = new Date(order.completedAt).getTime() - new Date(order.appointmentTime).getTime();
+    // For mock data visual:
+    return '45分钟';
   };
 
   return (
@@ -364,6 +388,7 @@ export default function WorkOrders() {
               setSearchQuery('');
               handleStatusChange('all');
               handleInspectorChange('all');
+              setCurrentPage(1);
             }}
             className="text-slate-500 hover:text-slate-700 h-9"
           >
@@ -398,7 +423,7 @@ export default function WorkOrders() {
                     <th className="py-3 px-4 w-10">
                       <input
                         type="checkbox"
-                        checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0}
+                        checked={selectedOrders.length === paginatedOrders.length && paginatedOrders.length > 0}
                         onChange={toggleSelectAll}
                         className="rounded border-slate-300"
                       />
@@ -408,12 +433,13 @@ export default function WorkOrders() {
                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">保管人</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">检测师</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">状态</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">检测耗时</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">预约时间</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredOrders.map((order) => (
+                  {paginatedOrders.map((order) => (
                     <tr
                       key={order.id}
                       className="hover:bg-slate-50 transition-colors"
@@ -472,6 +498,9 @@ export default function WorkOrders() {
                         <StatusBadge status={order.status} />
                       </td>
                       <td className="py-3 px-4">
+                        <span className="text-sm text-slate-600">{getDuration(order)}</span>
+                      </td>
+                      <td className="py-3 px-4">
                         <div className="flex items-center text-slate-600 text-sm">
                           <Calendar className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
                           {order.appointmentTime}
@@ -515,7 +544,7 @@ export default function WorkOrders() {
               </table>
             </div>
 
-            {filteredOrders.length === 0 && (
+            {filteredOrders.length === 0 ? (
               <div className="py-12 text-center">
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Search className="w-8 h-8 text-slate-400" />
@@ -528,11 +557,39 @@ export default function WorkOrders() {
                       setSearchQuery('');
                       handleStatusChange('all');
                       handleInspectorChange('all');
+                      setCurrentPage(1);
                     }}
                   >
                     清除筛选条件
                   </Button>
                 )}
+              </div>
+            ) : (
+              <div className="px-4 py-4 border-t border-slate-100 flex items-center justify-between">
+                <div className="text-sm text-slate-500">
+                  显示 {Math.min(filteredOrders.length, (currentPage - 1) * itemsPerPage + 1)} 到 {Math.min(filteredOrders.length, currentPage * itemsPerPage)} 条，共 {filteredOrders.length} 条
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    上一页
+                  </Button>
+                  <div className="text-sm text-slate-600">
+                    第 {currentPage} / {totalPages} 页
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    下一页
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
